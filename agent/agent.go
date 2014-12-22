@@ -1,15 +1,16 @@
-pckage agent
+package agent
 
 import (
     "sync"
     "os"
+    "fmt"
     "net"
 
-    "github.com/desperado-bvb/dortmund/agent"
+    "github.com/desperado-bvb/dortmund/util/wait"
+    "github.com/desperado-bvb/dortmund/util"
 )
 
 type SERVER struct {
-    clients       map[string]*Client
 
     sync.RWMutex
     opts          *options
@@ -27,7 +28,7 @@ type SERVER struct {
     waitGroup     wait.WaitGroupWrapper
 }
 
-func NewServer(opts *options) {
+func NewServer(opts *options) *SERVER {
     s := &SERVER {
         opts     :   opts,
         healthy  :   1,
@@ -82,7 +83,7 @@ func (s *SERVER) Main() {
         util.TCPServer(s.tcpListener, tcpServer, s.opts.Logger)
     })
 
-    httpListener, err = net.Listen("tcp", s.httpAddr.String())
+    httpListener, err := net.Listen("tcp", s.httpAddr.String())
     if err != nil {
 	s.logf("FATAL: listen (%s) failed - %s", s.httpAddr, err)
 	os.Exit(1)
@@ -91,8 +92,6 @@ func (s *SERVER) Main() {
     s.httpListener = httpListener
     httpServer := &httpServer{
         ctx:         ctx,
-        tlsEnabled:  false,
-	tlsRequired: false,
     }
 
     s.waitGroup.Wrap(func() {
@@ -100,6 +99,3 @@ func (s *SERVER) Main() {
     })
 
 }
-
-
-
