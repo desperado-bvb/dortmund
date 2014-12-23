@@ -59,7 +59,10 @@ func (s *httpServer) v1Router(w http.ResponseWriter, req *http.Request) error {
     switch req.URL.Path {
     case "/pub":
 	util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
-	    func() (interface{}, error) { return s.doPUB(req) }))
+	     func() (interface{}, error) { return s.doPUB(req) }))
+     case "/pub":
+              util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
+                     func() (interface{}, error) { return s.doMUB(req) }))
 
     default:
         return errors.New(fmt.Sprintf("404 %s", req.URL.Path))
@@ -99,6 +102,40 @@ func (s *httpServer) doPUB(req *http.Request) (interface{}, error) {
     err = r.wait()
     if err != nil {
 	return nil, util.HTTPError{503, "EXITING"}
+    }
+
+    return "OK", nil
+}
+
+func (s *httpServer) doMUB(req *http.Request) (interface{}, error) {
+
+    if req.ContentLength > s.ctx.svr.opts.MaxMsgSize {
+    return nil, util.HTTPError{413, "MSG_TOO_BIG"}
+    }
+
+    readMax := s.ctx.svr.opts.MaxMsgSize + 1
+    body, err := ioutil.ReadAll(io.LimitReader(req.Body, readMax))
+    if err != nil {
+    return nil, util.HTTPError{500, "INTERNAL_ERROR"}
+    }
+
+    if int64(len(body)) == readMax {
+    s.ctx.svr.logf("ERROR: /put hit max message size")
+    return nil, util.HTTPError{413, "MSG_TOO_BIG"}
+    }
+
+    if len(body) == 0 {
+    return nil, util.HTTPError{400, "MSG_EMPTY"}
+    }
+
+    topic, err := s.getTopicFromQuery(req)
+    if err != nil {
+    return nil, err
+    }
+    
+    err = s.ctx.svr.createSub(topic, string(body))
+    if err != nil {
+    return nil, util.HTTPError{503, "EXITING"}
     }
 
     return "OK", nil
