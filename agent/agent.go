@@ -5,6 +5,7 @@ import (
     "os"
     "fmt"
     "net"
+    "errors"
     "sync/atomic"
 
     "github.com/desperado-bvb/dortmund/util/wait"
@@ -26,7 +27,7 @@ type SERVER struct {
     tcpListener   net.Listener
     httpListener net.Listener
     pubSvr          *PubSvr 
-
+    subSvrs         map[string] *SubSvr 
 
     exitChan      chan int
     waitGroup     wait.WaitGroupWrapper
@@ -81,12 +82,16 @@ func (s *SERVER) logf(f string, args ...interface{}) {
 func (s *SERVER) Main() {
     ctx := &context{s}
 
-    pubSvr := newPubSvr(s.mqttAddr.String(), ctx)
+    pubSvr, err := newPubSvr(ctx)
+    if err != nil {
+         s.logf("FATAL: PubSvr(%s)  create pubSvr fail- %s", s.mqttAddr, err)
+        os.Exit(1)
+    }
     s.pubSvr = pubSvr
 
     err := s.pubSvr.start()
     if err != nil {
-        s.logf("FATAL: PubSvr(%s) failed - %s", s.mqttAddr, err)
+        s.logf("FATAL: PubSvr(%s) connection mqtt failed - %s", s.mqttAddr, err)
         os.Exit(1)
     }
 
@@ -119,6 +124,25 @@ func (s *SERVER) Main() {
     })
 }
 
+func (s *SERVER) Exit() {
+    if s.tcpListener != nil {
+        s.tcpListener.Close()
+    }
+
+    if s.httpListener != nil {
+        s.httpListener.Close()
+    }
+
+    s.Lock()
+    for ss := range s.subSvr {
+        ss.close()
+    }
+    s.Unlock()
+
+    s.pubSvr.close()
+    s.logf("Exiting from server")
+}
+
 func (s *SERVER) SetHealth(err error) {
     s.healthMtx.Lock()
     defer s.healthMtx.Unlock()
@@ -146,4 +170,45 @@ func (s *SERVER) GetHealth() string {
         return fmt.Sprintf("NOK - %s", s.GetError())
     }
     return "OK"
+}
+
+func (s *SERVER) createSub(topic string, callbackUrl string) error {
+    ctx := &context{s}
+
+    deleteCallback := func(sub *SubSvr) {
+        s.DeleteExistingSub(sub.fd.ClientId)
+    }
+     sub, err:= newSubSvr(callbackUrl, topic, ctx,  deleteCallback)
+     if err != nil {
+        return err
+     }
+
+     s.Lock()
+     item, ok := s.subSvrs[sub.fd.ClientId]
+     if !ok {
+        s.Unlock()
+        sub.close()
+        return errors.New("sub conflict")
+     } 
+     s.subSvrs[sub.fd.ClientId] = sub
+     s.Unlock()
+     return nil
+}
+
+func (s *SERVER) DeleteExistingSub(name string) error {
+    s.RLock()
+    sub, ok := s.subSvrs[name]
+    if !ok {
+        n.RUnlock()
+        return errors.New("sub does not exist")
+    }
+    s.RUnlock()
+
+    sub.Close()
+
+    s.Lock()
+    delete(s.subSvrs, name)
+    s.Unlock()
+
+    return nil
 }

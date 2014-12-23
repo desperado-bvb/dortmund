@@ -39,23 +39,22 @@ type PubSvr struct {
     waitGroup wait.WaitGroupWrapper
 }
 
-func newPubSvr(addr string, ctx *context) *PubSvr {
+func newPubSvr(ctx *context) (*PubSvr , err or) {
     p := &PubSvr {
-    	addr : addr ,
     	jobs  :  make(chan *job, ctx.svr.opts.MaxPubQueueSize),
     	ctx    : ctx,
     } 
 
-    conn, err := net.Dial("tcp", addr)
+    conn, err := net.Dial("tcp", ctx.svr.mqttAddr.String())
     if err != nil {
-        p.ctx.svr.logf("PunSvr: dial error - %s ", err)
+        return p, err
     }
 
     handle := mqtt.NewClientConn(conn)
     handle.Dump = false
 
     p.fd = handle
-    return p
+    return p, nil
 }
 
 func (p *PubSvr) start() error {
@@ -71,8 +70,8 @@ func (p *PubSvr) start() error {
 
 func (p *PubSvr) close() {
     close(p.jobs)
-    p.fd.Disconnect()
     p.waitGroup.Wait()
+    p.fd.Disconnect()
 }
 
 func (p *PubSvr) submit(topic string, body []byte)  {

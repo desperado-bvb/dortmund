@@ -57,10 +57,9 @@ func (s *httpServer) debugRouter(w http.ResponseWriter, req *http.Request) error
 
 func (s *httpServer) v1Router(w http.ResponseWriter, req *http.Request) error {
     switch req.URL.Path {
-    case "/publish":
+    case "/pub":
 	util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
 	    func() (interface{}, error) { return s.doPUB(req) }))
-
 
     default:
         return errors.New(fmt.Sprintf("404 %s", req.URL.Path))
