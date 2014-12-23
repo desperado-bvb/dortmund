@@ -2,8 +2,8 @@ package agent
 
 import (
     "sync"
-    "errors"
     "fmt"
+    "net"
 
     proto "github.com/huin/mqtt"
     "github.com/jeffallen/mqtt"
@@ -19,9 +19,10 @@ type SubSvr struct {
 
     deleteCallback func(*SubSvr)
     deleter              sync.Once
+    waitGroup          wait.WaitGroupWrapper
 }
 
-func (s *SubSvr) newSubSvr(callbackUrl string, topic string, ctx *context, deleteCallback func(*Subsvr) ) (*SubSvr, err) {
+func newSubSvr(callbackUrl string, topic string, ctx *context, deleteCallback func(*SubSvr) ) (*SubSvr, error) {
     s := &SubSvr {
     	callbackUrl        : callbackUrl,
     	topic                  : topic,
@@ -48,7 +49,7 @@ func (s *SubSvr) newSubSvr(callbackUrl string, topic string, ctx *context, delet
      
     tp := proto.TopicQos {
     	Topic : topic,
-    	Qos    : proto.QosAtMostOnce
+    	Qos    : proto.QosAtMostOnce,
     }
 
     s.fd.Subscribe([]proto.TopicQos{tp})
@@ -71,9 +72,10 @@ func (s *SubSvr) subLoop() {
         	fmt.Println(m)
         	if m == nil {
         		go s.deleter.Do(func() { s.deleteCallback(s) })
+                        return
         	}
 
-        case <- exitChan:
+        case <- s.exitChan:
         	goto exit
         }
     }

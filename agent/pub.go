@@ -39,7 +39,7 @@ type PubSvr struct {
     waitGroup wait.WaitGroupWrapper
 }
 
-func newPubSvr(ctx *context) (*PubSvr , err or) {
+func newPubSvr(ctx *context) (*PubSvr , error) {
     p := &PubSvr {
     	jobs  :  make(chan *job, ctx.svr.opts.MaxPubQueueSize),
     	ctx    : ctx,

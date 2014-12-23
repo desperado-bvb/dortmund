@@ -84,12 +84,12 @@ func (s *SERVER) Main() {
 
     pubSvr, err := newPubSvr(ctx)
     if err != nil {
-         s.logf("FATAL: PubSvr(%s)  create pubSvr fail- %s", s.mqttAddr, err)
+        s.logf("FATAL: PubSvr(%s)  create pubSvr fail- %s", s.mqttAddr, err)
         os.Exit(1)
     }
     s.pubSvr = pubSvr
 
-    err := s.pubSvr.start()
+    err = s.pubSvr.start()
     if err != nil {
         s.logf("FATAL: PubSvr(%s) connection mqtt failed - %s", s.mqttAddr, err)
         os.Exit(1)
@@ -134,8 +134,8 @@ func (s *SERVER) Exit() {
     }
 
     s.Lock()
-    for ss := range s.subSvr {
-        ss.close()
+    for _, sub := range s.subSvrs {
+        sub.Close()
     }
     s.Unlock()
 
@@ -184,10 +184,10 @@ func (s *SERVER) createSub(topic string, callbackUrl string) error {
      }
 
      s.Lock()
-     item, ok := s.subSvrs[sub.fd.ClientId]
+     _, ok := s.subSvrs[sub.fd.ClientId]
      if !ok {
         s.Unlock()
-        sub.close()
+        sub.Close()
         return errors.New("sub conflict")
      } 
      s.subSvrs[sub.fd.ClientId] = sub
@@ -199,7 +199,7 @@ func (s *SERVER) DeleteExistingSub(name string) error {
     s.RLock()
     sub, ok := s.subSvrs[name]
     if !ok {
-        n.RUnlock()
+        s.RUnlock()
         return errors.New("sub does not exist")
     }
     s.RUnlock()
