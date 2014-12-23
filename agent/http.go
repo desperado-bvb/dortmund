@@ -12,9 +12,6 @@ import (
     "net/url"
 
     "github.com/desperado-bvb/dortmund/util"
-    
-    proto "github.com/huin/mqtt"
-    "github.com/jeffallen/mqtt"
 )
 
 type httpServer struct {

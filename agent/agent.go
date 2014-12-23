@@ -5,6 +5,7 @@ import (
     "os"
     "fmt"
     "net"
+    "sync/atomic"
 
     "github.com/desperado-bvb/dortmund/util/wait"
     "github.com/desperado-bvb/dortmund/util"
@@ -20,9 +21,12 @@ type SERVER struct {
     err           error
 
     tcpAddr       *net.TCPAddr
-    httpAddr      *net.TCPAddr
+    httpAddr     *net.TCPAddr
+    mqttAddr    *net.TCPAddr 
     tcpListener   net.Listener
-    httpListener  net.Listener
+    httpListener net.Listener
+    pubSvr          *PubSvr 
+
 
     exitChan      chan int
     waitGroup     wait.WaitGroupWrapper
@@ -54,6 +58,13 @@ func NewServer(opts *options) *SERVER {
     }
     s.httpAddr = httpAddr
 
+    mqttAddr, err := net.ResolveTCPAddr("tcp", opts.MQTTAddress)
+    if err != nil {
+        s.logf("FATAL: fail to resolve TCP address(%s)-%s", opts.MQTTAddress, err)
+        os.Exit(1)
+    }
+    s.mqttAddr = mqttAddr
+
     s.logf("ID:%d", s.opts.ID)
 
     return s
@@ -69,6 +80,13 @@ func (s *SERVER) logf(f string, args ...interface{}) {
 
 func (s *SERVER) Main() {
     ctx := &context{s}
+
+    s.pubSvr  := newPubSvr(s.mqttAddr.String(), ctx)
+    err := s.pubSvr.start()
+    if err != nil {
+        s.logf("FATAL: PubSvr(%s) failed - %s", s.mqttAddr, err)
+        os.Exit(1)
+    }
 
     tcpListener, err := net.Listen("tcp", s.tcpAddr.String())
     if err != nil {
@@ -97,5 +115,33 @@ func (s *SERVER) Main() {
     s.waitGroup.Wrap(func() {
         util.HTTPServer(s.httpListener, httpServer, s.opts.Logger, "HTTP")
     })
+}
 
+func (s *SERVER) SetHealth(err error) {
+    s.healthMtx.Lock()
+    defer s.healthMtx.Unlock()
+
+    s.err = err
+    if err != nil {
+        atomic.StoreInt32(&s.healthy, 0)
+    } else {
+        atomic.StoreInt32(&s.healthy, 1)
+    }
+}
+
+func (s *SERVER) IsHealthy() bool {
+    return atomic.LoadInt32(&s.healthy) == 1
+}
+
+func (s *SERVER) GetError() error {
+    s.healthMtx.RLock()
+    defer s.healthMtx.RUnlock()
+    return s.err
+}
+
+func (s *SERVER) GetHealth() string {
+    if !s.IsHealthy() {
+        return fmt.Sprintf("NOK - %s", s.GetError())
+    }
+    return "OK"
 }

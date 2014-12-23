@@ -11,8 +11,12 @@ import (
 type options struct {
     ID               int64    `flag:"worker-id" cfg:"id"`
     TCPAddress       string   `flag:"tcp-address"`
-    HTTPAddress      string   `flag:"http-address"`
+    HTTPAddress     string   `flag:"http-address"`
+    MQTTAddress     string   `flag:"mqtt-address"`
     MaxMsgSize       int64    `flag:"max-msg-size" deprecated:"max-message-size" cfg:"max_msg_size"`
+    MaxPubQueueSize int64   `flag:"max-pub-queue-size"`
+    PubUsername   string    `flag:"pub-username"`
+    PubPassword    string    `flag:"pub-password"`
     Logger           logger
 }
 
@@ -24,9 +28,13 @@ func NewOptions() *options {
     }
 
     option := &options {
-        TCPAddress:       "0.0.0.0:4150",
-        HTTPAddress:      "0.0.0.0:4151",
-        MaxMsgSize:       1024768,
+        TCPAddress:             "0.0.0.0:4150",
+        HTTPAddress:           "0.0.0.0:4151",
+        MQTTAddress           "0.0.0.0:1883",
+        MaxMsgSize:             1024768,
+        MaxPubQueueSize:  100,
+        PubPassword:            "",
+        PubUsername:           "",
         Logger:           log.New(os.Stderr, "[MQTT] ", log.Ldate|log.Ltime|log.Lmicroseconds),
     }
 
