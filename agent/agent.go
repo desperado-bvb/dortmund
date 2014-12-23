@@ -38,6 +38,7 @@ func NewServer(opts *options) *SERVER {
         opts     :   opts,
         healthy  :   1,
         exitChan : make(chan int),
+        subSvrs  : make(map[string] *SubSvr),
     }
 
     if opts.ID < 0 || opts.ID > 4096 {
@@ -185,11 +186,11 @@ func (s *SERVER) createSub(topic string, callbackUrl string) error {
 
      s.Lock()
      _, ok := s.subSvrs[sub.fd.ClientId]
-     if !ok {
+     if ok {
         s.Unlock()
         sub.Close()
         return errors.New("sub conflict")
-     } 
+     }
      s.subSvrs[sub.fd.ClientId] = sub
      s.Unlock()
      return nil
