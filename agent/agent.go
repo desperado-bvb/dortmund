@@ -173,7 +173,7 @@ func (s *SERVER) GetHealth() string {
     return "OK"
 }
 
-func (s *SERVER) createSub(topic string, callbackUrl string) error {
+func (s *SERVER) createSub(topic string, callbackUrl string) (string, error) {
     ctx := &context{s}
 
     deleteCallback := func(sub *SubSvr) {
@@ -181,7 +181,7 @@ func (s *SERVER) createSub(topic string, callbackUrl string) error {
     }
      sub, err:= newSubSvr(callbackUrl, topic, ctx,  deleteCallback)
      if err != nil {
-        return err
+        return "", err
      }
 
      s.Lock()
@@ -189,11 +189,11 @@ func (s *SERVER) createSub(topic string, callbackUrl string) error {
      if ok {
         s.Unlock()
         sub.Close()
-        return errors.New("sub conflict")
+        return "", errors.New("sub conflict")
      }
      s.subSvrs[sub.fd.ClientId] = sub
      s.Unlock()
-     return nil
+     return sub.fd.ClientId, nil
 }
 
 func (s *SERVER) DeleteExistingSub(name string) error {
