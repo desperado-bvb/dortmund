@@ -30,7 +30,7 @@ func NewOptions() *options {
     option := &options {
         TCPAddress:             "0.0.0.0:4150",
         HTTPAddress:           "0.0.0.0:4151",
-        MQTTAddress           "0.0.0.0:1883",
+        MQTTAddress:           "0.0.0.0:1883",
         MaxMsgSize:             1024768,
         MaxPubQueueSize:  100,
         PubPassword:            "",

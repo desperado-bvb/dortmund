@@ -81,7 +81,9 @@ func (s *SERVER) logf(f string, args ...interface{}) {
 func (s *SERVER) Main() {
     ctx := &context{s}
 
-    s.pubSvr  := newPubSvr(s.mqttAddr.String(), ctx)
+    pubSvr := newPubSvr(s.mqttAddr.String(), ctx)
+    s.pubSvr = pubSvr
+
     err := s.pubSvr.start()
     if err != nil {
         s.logf("FATAL: PubSvr(%s) failed - %s", s.mqttAddr, err)

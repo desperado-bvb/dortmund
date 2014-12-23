@@ -3,10 +3,8 @@ package agent
 import (
     "errors"
     "fmt"
-    "os"
     "io"
     "io/ioutil"
-    "net"
     "net/http"
     httpprof "net/http/pprof"
     "net/url"
@@ -96,34 +94,13 @@ func (s *httpServer) doPUB(req *http.Request) (interface{}, error) {
 	return nil, err
     }
 
-    conn, err := net.Dial("tcp", "localhost:1883")
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "dial: ", err)
-    }
+    fmt.Println(topic, string(body))
 
-    cc := mqtt.NewClientConn(conn)
-    cc.Dump = false
-
-    if err := cc.Connect("", ""); err != nil {
-        fmt.Fprintf(os.Stderr, "connect: %v\n", err)
-        os.Exit(1)
-    }
-
-    fmt.Println("Connected with client id ", cc.ClientId)
-
-    cc.Publish(&proto.Publish{
-        Header:    proto.Header{Retain: false},
-        TopicName: topic,
-        Payload:   proto.BytesPayload(body),
-    })
-
-    cc.Disconnect()
-
-    /*msg := NewMessage(<-s.ctx.nsqd.idChan, body)
-    err = topic.PutMessage(msg)
+    r := s.ctx.svr.pubSvr.submitAsync(topic, body)
+    err = r.wait()
     if err != nil {
 	return nil, util.HTTPError{503, "EXITING"}
-    }*/
+    }
 
     return "OK", nil
 }

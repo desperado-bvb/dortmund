@@ -2,6 +2,8 @@ package agent
 
 import (
     "net"
+    "time"
+    "errors"
 
     proto "github.com/huin/mqtt"
     "github.com/jeffallen/mqtt"
@@ -10,9 +12,16 @@ import (
 
 type receipt chan struct{}
 
-func (r receipt) wait() {
-	// TODO: timeout
-	<- r
+func (r receipt) wait() error {
+        ticker := time.NewTicker(2 * time.Second)
+
+        select {
+	case <- r:
+            return nil
+        case <-ticker.C:
+            ticker.Stop()
+            return errors.New("timeout")
+        }
 }
 
 type job struct {
@@ -23,23 +32,23 @@ type job struct {
 
 type PubSvr struct {
     addr           string
-    jobs            chan job
-    fd                *mqtt.ClientConn
+    jobs           chan *job
+    fd             *mqtt.ClientConn
 
-    ctx              *context
+    ctx            *context
     waitGroup wait.WaitGroupWrapper
 }
 
 func newPubSvr(addr string, ctx *context) *PubSvr {
     p := &PubSvr {
     	addr : addr ,
-    	jobs  :  make(chan job, ctx.opts.MaxPubQueueSize),
+    	jobs  :  make(chan *job, ctx.svr.opts.MaxPubQueueSize),
     	ctx    : ctx,
     } 
 
     conn, err := net.Dial("tcp", addr)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "dial: ", err)
+        p.ctx.svr.logf("PunSvr: dial error - %s ", err)
     }
 
     handle := mqtt.NewClientConn(conn)
@@ -50,18 +59,19 @@ func newPubSvr(addr string, ctx *context) *PubSvr {
 }
 
 func (p *PubSvr) start() error {
-    if err := p.fd.Connect(p.ctx.opts.PubUsername, p.ctx.opts.PubPassword); err != nil {
+    if err := p.fd.Connect(p.ctx.svr.opts.PubUsername, p.ctx.svr.opts.PubPassword); err != nil {
         p.ctx.svr.logf("PubSvr: connect to mqtt err - %s",  err)
         return err
     }
      
-     p.ctx.svr.logf("Connected with client id(%s) ", p.fd.ClientId)
+     p.ctx.svr.logf("PubSvr: Connected with client id(%s) ", p.fd.ClientId)
      p.waitGroup.Wrap(func() { p.pubLoop() })
      return nil
 }
 
 func (p *PubSvr) close() {
     close(p.jobs)
+    p.fd.Disconnect()
     p.waitGroup.Wait()
 }
 
@@ -80,7 +90,7 @@ func (p *PubSvr) submit(topic string, body []byte)  {
     }
 }
 
-func (p *PubSvr) submitAsync(topic string, body []byte) {
+func (p *PubSvr) submitAsync(topic string, body []byte) receipt {
     j := &job {
         topic : topic,
         body : body,
