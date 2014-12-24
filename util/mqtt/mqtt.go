@@ -2,10 +2,30 @@ package mqtt
 
 import (
      "sync/atomic"
+     "net"
+     crand "crypto/rand"
+     "math/rand"
+     "io"
+     "strings"
+     "log"
+     "errors"
+     "fmt"
+     "time"
 
-     "github.com/desperado-bvb/dortmund/util"
       proto "github.com/huin/mqtt"
 )
+
+var cliRand *rand.Rand
+
+func init() {
+	var seed int64
+	var sb [4]byte
+	crand.Read(sb[:])
+	seed = int64(time.Now().Nanosecond())<<32 |
+		int64(sb[0])<<24 | int64(sb[1])<<16 |
+		int64(sb[2])<<8 | int64(sb[3])
+	cliRand = rand.New(rand.NewSource(seed))
+}
 
 type retainFlag bool
 type dupFlag bool
@@ -201,23 +221,24 @@ func (c *ClientConn) Subscribe(tqs []proto.TopicQos) (*proto.SubAck, error) {
 
 // Publish publishes the given message to the MQTT server.
 // The QosLevel of the message must be QosAtLeastOnce for now.
-func (c *ClientConn) Publish(m *proto.Publish) err {
+func (c *ClientConn) Publish(m *proto.Publish) error {
 	if atomic.LoadInt32(&c.exitFlage) == 1 {
 		return errors.New("exiting")
 	}
 	if m.QosLevel != proto.QosAtMostOnce {
-		panic("unsupported QoS level")
+		return errors.New("unsupported QoS level")
 	}
 	c.out <- job{m: m}
+        return nil
 }
 
 // sync sends a message and blocks until it was actually sent.
-func (c *ClientConn) sync(m proto.Message) {
+func (c *ClientConn) sync(m proto.Message) error {
 	if atomic.LoadInt32(&c.exitFlage) == 1 {
 		return  errors.New("exiting")
 	}
 	j := job{m: m, r: make(receipt)}
 	c.out <- j
 	<-j.r
-	return
+	return nil
 }
