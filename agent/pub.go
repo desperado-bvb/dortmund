@@ -4,9 +4,10 @@ import (
     "net"
     "time"
     "errors"
+    "sync/atomic"
 
     proto "github.com/huin/mqtt"
-    "github.com/jeffallen/mqtt"
+    "github.com/desperado-bvb/dortmund/util/mqtt"
     "github.com/desperado-bvb/dortmund/util/wait"
 )
 
@@ -31,6 +32,7 @@ type job struct {
 }
 
 type PubSvr struct {
+    exitFlag       int32
     addr           string
     jobs           chan *job
     fd             *mqtt.ClientConn
@@ -69,12 +71,17 @@ func (p *PubSvr) start() error {
 }
 
 func (p *PubSvr) close() {
+    atomic.StoreInt32(&p.exitFlag, 1)
     close(p.jobs)
     p.waitGroup.Wait()
     p.fd.Disconnect()
 }
 
-func (p *PubSvr) submit(topic string, body []byte)  {
+func (p *PubSvr) submit(topic string, body []byte)  error {
+    if atomic.LoadInt32(&p.exitFlag) == 1 {
+        return errors.New("exiting")
+    }
+
     j := &job {
         topic : topic,
         body : body,
@@ -87,9 +94,15 @@ func (p *PubSvr) submit(topic string, body []byte)  {
          p.ctx.svr.logf("PubSvr: fail to publish  %s",  topic)
 
     }
+
+    return nil
 }
 
-func (p *PubSvr) submitAsync(topic string, body []byte) receipt {
+func (p *PubSvr) submitAsync(topic string, body []byte) (receipt, error) {
+     if atomic.LoadInt32(&p.exitFlag) == 1 {
+        return nil, errors.New("exiting")
+    }
+
     j := &job {
         topic : topic,
         body : body,
@@ -97,21 +110,25 @@ func (p *PubSvr) submitAsync(topic string, body []byte) receipt {
     }
 
     p.jobs <- j
-    return j.r
+    return j.r, nil
 }
 
 func (p *PubSvr) pubLoop()  {
     for j := range p.jobs {
 
-        if j.r != nil {
-        	close(j.r)
-        }
-
-        p.fd.Publish(&proto.Publish{
+        err := p.fd.Publish(&proto.Publish{
             Header:    proto.Header{Retain: false},
             TopicName: j.topic,
             Payload:   proto.BytesPayload(j.body),
         })
+        if err != nil {
+            p.close()
+            return 
+        }
+
+        if j.r != nil {
+                close(j.r)
+        }
     }
 
     p.ctx.svr.logf("PubSvr: exiting from loop")

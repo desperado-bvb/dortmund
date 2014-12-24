@@ -6,7 +6,7 @@ import (
     "net"
 
     proto "github.com/huin/mqtt"
-    "github.com/jeffallen/mqtt"
+    "github.com/desperado-bvb/dortmund/util/mqtt"
     "github.com/desperado-bvb/dortmund/util/wait"
 )
 
@@ -38,7 +38,7 @@ func newSubSvr(callbackUrl string, topic string, tc bool, ctx *context, deleteCa
     conn, err := net.Dial("tcp",  ctx.svr.mqttAddr.String())
     if err != nil {
         s.ctx.svr.logf("SubSvr: create connect to mqtt err - %s",  err)
-        return s, err
+        return nil, err
     }
 
     handle := mqtt.NewClientConn(conn)
@@ -48,7 +48,7 @@ func newSubSvr(callbackUrl string, topic string, tc bool, ctx *context, deleteCa
 
     if err := s.fd.Connect(s.ctx.svr.opts.PubUsername, s.ctx.svr.opts.PubPassword); err != nil {
         s.ctx.svr.logf("SubSvr(%s): connect to mqtt err - %s",  s.fd.ClientId, err)
-        return s, err
+        return nil, err
     }
 
     if tc {
@@ -64,7 +64,10 @@ func newSubSvr(callbackUrl string, topic string, tc bool, ctx *context, deleteCa
     	Qos    : proto.QosAtMostOnce,
     }
 
-    s.fd.Subscribe([]proto.TopicQos{tp})
+    _, err = s.fd.Subscribe([]proto.TopicQos{tp})
+    if err != nil {
+        return nil, err
+    }
 
      s.ctx.svr.logf("SubSvr: Connected with client id(%s) ", s.fd.ClientId)
      s.waitGroup.Wrap(func() { s.subLoop() })
