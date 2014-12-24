@@ -175,14 +175,14 @@ func (s *SERVER) GetHealth() string {
     return "OK"
 }
 
-func (s *SERVER) createSub(topic string, callbackUrl string) (string, error) {
+func (s *SERVER) createSub(topic string, tc bool, callbackUrl string) (string, error) {
     ctx := &context{s}
 
     deleteCallback := func(sub *SubSvr) {
         s.DeleteExistingSub(sub.name)
     }
 
-    sub, err := newSubSvr(callbackUrl, topic, ctx,  deleteCallback)
+    sub, err := newSubSvr(callbackUrl, topic, tc,  ctx,  deleteCallback)
     if err != nil {
         return "", err
     }

@@ -25,6 +25,7 @@ type SubSvr struct {
 }
 
 func newSubSvr(callbackUrl string, topic string, tc bool, ctx *context, deleteCallback func(*SubSvr) ) (*SubSvr, error) {
+    var  topicName string
     s := &SubSvr {
     	callbackUrl        : callbackUrl,
     	topic                  : topic,
@@ -52,14 +53,14 @@ func newSubSvr(callbackUrl string, topic string, tc bool, ctx *context, deleteCa
 
     if tc {
         s.name = topic
-        topicName := topic + "/#"
+        topicName = topic + "/#"
     } else {
         s.name = s.fd.ClientId
-        topicName := topic 
+        topicName = topic 
     }
      
     tp := proto.TopicQos {
-    	Topic : topicName
+    	Topic : topicName,
     	Qos    : proto.QosAtMostOnce,
     }
 
@@ -86,8 +87,8 @@ func (s *SubSvr) subLoop() {
                         return
         	}
 
-              if tc {
-                    t.ctx.svr.pubSvr.submit("test2", []byte("hahahha"))
+              if s.tc {
+                    s.ctx.svr.pubSvr.submit("test2", []byte("hahahha"))
               }
 
         case <- s.exitChan:

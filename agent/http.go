@@ -120,7 +120,7 @@ func (s *httpServer) doHandle(req *http.Request, operation string) (interface{},
 		res = "OK"
 
 	case "sub":
-		id, err := s.ctx.svr.createSub(topic, string(body))
+		id, err := s.ctx.svr.createSub(topic, false, string(body))
 		if err != nil {
 			s.ctx.svr.logf("ERROR: create sub - %s", err)
 			return nil, util.HTTPError{503, "EXITING"}
@@ -128,7 +128,7 @@ func (s *httpServer) doHandle(req *http.Request, operation string) (interface{},
 		res = id
 
 	case "add":
-		err = s.ctx.svr.createSub(topic, string(body))
+		_, err = s.ctx.svr.createSub(topic, true, string(body))
         		if err != nil {
                		s.ctx.svr.logf("ERROR: create transterCoding - %s", err)
                		return nil, util.HTTPError{503, "EXITING"}
@@ -136,13 +136,13 @@ func (s *httpServer) doHandle(req *http.Request, operation string) (interface{},
         		res = "OK"
 	}
 
-	return "OK", nil
+	return res, nil
 }
 
 
 func (s *httpServer) doUNSUB(req *http.Request) (interface{}, error) {
 
-	name, err := s.getParamFromQuery(req)
+	name, err := s.getTopicFromQuery(req)
 	if err != nil {
 		return nil, err
 	}
