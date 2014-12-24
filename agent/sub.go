@@ -14,34 +14,39 @@ import (
 )
 
 type SubSvr struct {
-    name                string
-    callbackUrl       string
-    topic                  string
-    fd                       *mqtt.ClientConn
-    ctx                     *context
-    exitChan            chan int
+    name           string
+    callbackUrl    string
+    topic          string
+    fd             *mqtt.ClientConn
+    ctx            *context
+    exitChan       chan int
 
     deleteCallback func(*SubSvr)
-    tc                         bool
-    deleter                sync.Once
-    waitGroup          wait.WaitGroupWrapper
+    tc             bool
+    deleter        sync.Once
+    waitGroup      wait.WaitGroupWrapper
 }
 
-func newSubSvr(callbackUrl string, topic string, tc bool, ctx *context, deleteCallback func(*SubSvr) ) (*SubSvr, error) {
-    var  topicName string
+func newSubSvr(callbackUrl string, topic string, tc bool, ctx *context, deleteCallback func(*SubSvr) ) *SubSvr {
     s := &SubSvr {
-    	callbackUrl        : callbackUrl,
-    	topic                  : topic,
-              tc                        : tc,
+    	callbackUrl:     callbackUrl,
+    	topic :          topic,
+        tc :             tc,
     	deleteCallback : deleteCallback,
-    	ctx                     : ctx,
-    	exitChan           : make(chan int),
+    	ctx :            ctx,
+    	exitChan :       make(chan int),
     }
 
-    conn, err := net.Dial("tcp",  ctx.svr.mqttAddr.String())
+    return s
+}
+
+func (s *SubSvr) start() error {
+    var topicName string
+
+    conn, err := net.Dial("tcp",  s.ctx.svr.mqttAddr.String())
     if err != nil {
         s.ctx.svr.logf("SubSvr: create connect to mqtt err - %s",  err)
-        return nil, err
+        return  err
     }
 
     handle := mqtt.NewClientConn(conn)
@@ -51,15 +56,15 @@ func newSubSvr(callbackUrl string, topic string, tc bool, ctx *context, deleteCa
 
     if err := s.fd.Connect(s.ctx.svr.opts.MqttUserName, s.ctx.svr.opts.MqttPassWord); err != nil {
         s.ctx.svr.logf("SubSvr(%s): connect to mqtt err - %s",  s.fd.ClientId, err)
-        return nil, err
+        return err
     }
 
-    if tc {
-        s.name = topic
-        topicName = topic + "/#"
+    if s.tc {
+        s.name = s.topic
+        topicName = s.topic + "/#"
     } else {
         s.name = s.fd.ClientId
-        topicName = topic 
+        topicName = s.topic 
     }
      
     tp := proto.TopicQos {
@@ -69,49 +74,49 @@ func newSubSvr(callbackUrl string, topic string, tc bool, ctx *context, deleteCa
 
     _, err = s.fd.Subscribe([]proto.TopicQos{tp})
     if err != nil {
-        return nil, err
+        return err
     }
 
      s.ctx.svr.logf("SubSvr: Connected with client id(%s) ", s.name)
      s.waitGroup.Wrap(func() { s.subLoop() })
-     return s, nil
+     return nil
 }
 
 func (s *SubSvr) Close() {
     close(s.exitChan)
     s.waitGroup.Wait()
-    s.fd.Disconnect()
 }
 
 func (s *SubSvr) subLoop() {
     for {
         select {
         case  m := <- s.fd.Incoming :
-        	if m == nil {
-        		go s.deleter.Do(func() { s.deleteCallback(s) })
-                        return
-        	}
+            if m == nil {
+                s.Close()
+                return
+            }
 
-               resp, err := http.PostForm(s.callbackUrl,
-                   url.Values{"topic": {m.TopicName}, "body": {string(m.Payload.(proto.BytesPayload))}})
-              if err != nil {
-                   s.ctx.svr.logf("SubSvr(%s): call callbackUrl err - %s ", s.name, err)
-                   continue
-              }
+            resp, err := http.PostForm(s.callbackUrl,
+                url.Values{"topic": {m.TopicName}, "body": {string(m.Payload.(proto.BytesPayload))}})
+            if err != nil {
+               s.ctx.svr.logf("SubSvr(%s): call callbackUrl err - %s ", s.name, err)
+               continue
+            }
 
-              res, err := ioutil.ReadAll(resp.Body)
+            res, err := ioutil.ReadAll(resp.Body)
 
-              if s.tc {
-                  content := make(map[string] string)
-                  err = json.Unmarshal(res, &content)
-                  if err != nil {
-                      s.ctx.svr.logf("SubSvr(%s): json topic(%s) err - %s ", s.name,m.TopicName, err)
-                  } else {
-                      s.ctx.svr.pubSvr.submit(content["topic"], []byte(content["body"]))
-                  }
-              } 
+            if s.tc {
+                content := make(map[string] string)
+
+                err = json.Unmarshal(res, &content)
+                if err != nil {
+                    s.ctx.svr.logf("SubSvr(%s): json topic(%s) err - %s ", s.name,m.TopicName, err)
+                } else {
+                    s.ctx.svr.pubSvr.submit(content["topic"], []byte(content["body"]))
+                }
+            } 
                
-              resp.Body.Close()
+            resp.Body.Close()
 
         case <- s.exitChan:
         	goto exit
@@ -119,5 +124,6 @@ func (s *SubSvr) subLoop() {
     }
 
 exit:
+    s.fd.Disconnect()
     s.ctx.svr.logf("SunSvr(%s): exit from loop", s.fd.ClientId)
 }

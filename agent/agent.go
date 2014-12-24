@@ -97,11 +97,11 @@ func (s *SERVER) Main() {
         os.Exit(1)
     }
 
-    /*err = s.retriveMeta(s.opts.MetaUrl)
+    err = s.retriveMeta(s.opts.MetaUrl)
     if err != nil {
         s.logf("FATAL: retriveMeta(%s) connection mqtt failed - %s", s.opts.MetaUrl, err)
         os.Exit(1)
-    }*/
+    }
 
     tcpListener, err := net.Listen("tcp", s.tcpAddr.String())
     if err != nil {
@@ -192,7 +192,9 @@ func (s *SERVER) createSub(topic string, tc bool, callbackUrl string) (string, e
         s.DeleteExistingSub(sub.name)
     }
 
-    sub, err := newSubSvr(callbackUrl, topic, tc,  ctx,  deleteCallback)
+    sub := newSubSvr(callbackUrl, topic, tc,  ctx,  deleteCallback)
+
+    err := sub.start()
     if err != nil {
         return "", err
     }
