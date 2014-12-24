@@ -11,6 +11,7 @@ import (
 )
 
 type SubSvr struct {
+    name                string
     callbackUrl       string
     topic                  string
     fd                       *mqtt.ClientConn
@@ -18,17 +19,19 @@ type SubSvr struct {
     exitChan            chan int
 
     deleteCallback func(*SubSvr)
-    deleter              sync.Once
+    tc                         bool
+    deleter                sync.Once
     waitGroup          wait.WaitGroupWrapper
 }
 
-func newSubSvr(callbackUrl string, topic string, ctx *context, deleteCallback func(*SubSvr) ) (*SubSvr, error) {
+func newSubSvr(callbackUrl string, topic string, tc bool, ctx *context, deleteCallback func(*SubSvr) ) (*SubSvr, error) {
     s := &SubSvr {
     	callbackUrl        : callbackUrl,
     	topic                  : topic,
-    	deleteCallback  : deleteCallback,
-    	ctx                      : ctx,
-    	exitChan            : make(chan int),
+              tc                        : tc,
+    	deleteCallback : deleteCallback,
+    	ctx                     : ctx,
+    	exitChan           : make(chan int),
     }
 
     conn, err := net.Dial("tcp",  ctx.svr.mqttAddr.String())
@@ -46,9 +49,17 @@ func newSubSvr(callbackUrl string, topic string, ctx *context, deleteCallback fu
         s.ctx.svr.logf("SubSvr(%s): connect to mqtt err - %s",  s.fd.ClientId, err)
         return s, err
     }
+
+    if tc {
+        s.name = topic
+        topicName := topic + "/#"
+    } else {
+        s.name = s.fd.ClientId
+        topicName := topic 
+    }
      
     tp := proto.TopicQos {
-    	Topic : topic,
+    	Topic : topicName
     	Qos    : proto.QosAtMostOnce,
     }
 
@@ -74,6 +85,10 @@ func (s *SubSvr) subLoop() {
         		go s.deleter.Do(func() { s.deleteCallback(s) })
                         return
         	}
+
+              if tc {
+                    t.ctx.svr.pubSvr.submit("test2", []byte("hahahha"))
+              }
 
         case <- s.exitChan:
         	goto exit

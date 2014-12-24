@@ -59,21 +59,21 @@ func (s *httpServer) v1Router(w http.ResponseWriter, req *http.Request) error {
 	switch req.URL.Path {
 	case "/pub":
 		util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
-			func() (interface{}, error) { return s.doPUB(req) }))
+			func() (interface{}, error) { return s.doHandle(req, "pub") }))
 	case "/sub":
 		util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
-			func() (interface{}, error) { return s.doSUB(req) }))
+			func() (interface{}, error) { return s.doHandle(req, "sub") }))
 	case "/unsub":
 		util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
 			func() (interface{}, error) { return s.doUNSUB(req) }))
 
-       case "/addtc":
+    	case "/addTranstercoding":
                 util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
-                        func() (interface{}, error) { return s.doADDTC(req) }))
+                        func() (interface{}, error) { return s.doHandle(req, "add") }))
 
-       case "/rmtc":
+       	case "/removeTranstercoding":
                 util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
-                        func() (interface{}, error) { return s.doRMTC(req) }))
+                        func() (interface{}, error) { return s.doUNSUB(req) }))
 
 	default:
 		return errors.New(fmt.Sprintf("404 %s", req.URL.Path))
@@ -81,7 +81,8 @@ func (s *httpServer) v1Router(w http.ResponseWriter, req *http.Request) error {
 	return nil
 }
 
-func (s *httpServer) doPUB(req *http.Request) (interface{}, error) {
+func (s *httpServer) doHandle(req *http.Request, operation string) (interface{}, error) {
+	var res string
 
 	if req.ContentLength > s.ctx.svr.opts.MaxMsgSize {
 		return nil, util.HTTPError{413, "MSG_TOO_BIG"}
@@ -109,153 +110,50 @@ func (s *httpServer) doPUB(req *http.Request) (interface{}, error) {
 
 	fmt.Println(topic, string(body))
 
-	r := s.ctx.svr.pubSvr.submitAsync(topic, body)
-	err = r.wait()
-	if err != nil {
-		return nil, util.HTTPError{503, "EXITING"}
+	switch operation {
+	case "pub":
+		r := s.ctx.svr.pubSvr.submitAsync(topic, body)
+		err = r.wait()
+		if err != nil {
+			return nil, util.HTTPError{503, "EXITING"}
+		}
+		res = "OK"
+
+	case "sub":
+		id, err := s.ctx.svr.createSub(topic, string(body))
+		if err != nil {
+			s.ctx.svr.logf("ERROR: create sub - %s", err)
+			return nil, util.HTTPError{503, "EXITING"}
+		}
+		res = id
+
+	case "add":
+		err = s.ctx.svr.createSub(topic, string(body))
+        		if err != nil {
+               		s.ctx.svr.logf("ERROR: create transterCoding - %s", err)
+               		return nil, util.HTTPError{503, "EXITING"}
+        		}
+        		res = "OK"
 	}
 
 	return "OK", nil
 }
 
-func (s *httpServer) doSUB(req *http.Request) (interface{}, error) {
-
-	if req.ContentLength > s.ctx.svr.opts.MaxMsgSize {
-		return nil, util.HTTPError{413, "MSG_TOO_BIG"}
-	}
-
-	readMax := s.ctx.svr.opts.MaxMsgSize + 1
-	body, err := ioutil.ReadAll(io.LimitReader(req.Body, readMax))
-	if err != nil {
-		return nil, util.HTTPError{500, "INTERNAL_ERROR"}
-	}
-
-	if int64(len(body)) == readMax {
-		s.ctx.svr.logf("ERROR: /put hit max message size")
-		return nil, util.HTTPError{413, "MSG_TOO_BIG"}
-	}
-
-	if len(body) == 0 {
-		return nil, util.HTTPError{400, "MSG_EMPTY"}
-	}
-
-	topic, err := s.getTopicFromQuery(req)
-	if err != nil {
-		return nil, err
-	}
-
-	id, err := s.ctx.svr.createSub(topic, string(body))
-	if err != nil {
-		s.ctx.svr.logf("ERROR: create sub - %s", err)
-		return nil, util.HTTPError{503, "EXITING"}
-	}
-
-	return id, nil
-}
 
 func (s *httpServer) doUNSUB(req *http.Request) (interface{}, error) {
 
-	if req.ContentLength > s.ctx.svr.opts.MaxMsgSize {
-		return nil, util.HTTPError{413, "MSG_TOO_BIG"}
-	}
-
-	readMax := s.ctx.svr.opts.MaxMsgSize + 1
-	body, err := ioutil.ReadAll(io.LimitReader(req.Body, readMax))
-	if err != nil {
-		return nil, util.HTTPError{500, "INTERNAL_ERROR"}
-	}
-
-	if int64(len(body)) == readMax {
-		s.ctx.svr.logf("ERROR: /put hit max message size")
-		return nil, util.HTTPError{413, "MSG_TOO_BIG"}
-	}
-
-	if len(body) == 0 {
-		return nil, util.HTTPError{400, "MSG_EMPTY"}
-	}
-
-	_, err = s.getTopicFromQuery(req)
+	name, err := s.getParamFromQuery(req)
 	if err != nil {
 		return nil, err
 	}
 
-	err = s.ctx.svr.DeleteExistingSub(string(body))
+	err = s.ctx.svr.DeleteExistingSub(string(name))
 	if err != nil {
 		s.ctx.svr.logf("ERROR: delete sub - %s", err)
 		return nil, util.HTTPError{503, "EXITING"}
 	}
 
 	return "OK", nil
-}
-
-func (s *httpServer) doADDTC(req *http.Request) (interface{}, error) {
-        
-        if req.ContentLength > s.ctx.svr.opts.MaxMsgSize {
-                return nil, util.HTTPError{413, "MSG_TOO_BIG"}
-        }
-        
-        readMax := s.ctx.svr.opts.MaxMsgSize + 1
-        body, err := ioutil.ReadAll(io.LimitReader(req.Body, readMax))
-        if err != nil {
-                return nil, util.HTTPError{500, "INTERNAL_ERROR"}
-        }
-        
-        if int64(len(body)) == readMax {
-                s.ctx.svr.logf("ERROR: /put hit max message size")
-                return nil, util.HTTPError{413, "MSG_TOO_BIG"}
-        }
-        
-        if len(body) == 0 { 
-                return nil, util.HTTPError{400, "MSG_EMPTY"}
-        }
-        
-        topic, err := s.getTopicFromQuery(req)
-        if err != nil {
-                return nil, err
-        }
-        
-        err = s.ctx.svr.createTransterCoding(topic, string(body))
-        if err != nil {
-                s.ctx.svr.logf("ERROR: create transterCoding - %s", err)
-                return nil, util.HTTPError{503, "EXITING"}
-        }
-        
-        return "OK", nil
-}
-
-func (s *httpServer) doRMTC(req *http.Request) (interface{}, error) {
-        
-        if req.ContentLength > s.ctx.svr.opts.MaxMsgSize {
-                return nil, util.HTTPError{413, "MSG_TOO_BIG"}
-        }
-        
-        readMax := s.ctx.svr.opts.MaxMsgSize + 1
-        body, err := ioutil.ReadAll(io.LimitReader(req.Body, readMax))
-        if err != nil {
-                return nil, util.HTTPError{500, "INTERNAL_ERROR"}
-        }
-        
-        if int64(len(body)) == readMax {
-                s.ctx.svr.logf("ERROR: /put hit max message size")
-                return nil, util.HTTPError{413, "MSG_TOO_BIG"}
-        }
-        
-        if len(body) == 0 { 
-                return nil, util.HTTPError{400, "MSG_EMPTY"}
-        }
-        
-        topic, err := s.getTopicFromQuery(req)
-        if err != nil {
-                return nil, err
-        }
-        
-        err = s.ctx.svr.DeleteExistingTc(topic)
-        if err != nil {
-                s.ctx.svr.logf("ERROR: create transterCoding - %s", err)
-                return nil, util.HTTPError{503, "EXITING"}
-        }
-        
-        return "OK", nil
 }
 
 func (s *httpServer) getTopicFromQuery(req *http.Request) (string, error) {
@@ -265,7 +163,7 @@ func (s *httpServer) getTopicFromQuery(req *http.Request) (string, error) {
 		return "", util.HTTPError{400, "INVALID_REQUEST"}
 	}
 
-	topicNames, ok := reqParams["topic"]
+	topicNames, ok := reqParams["name"]
 	if !ok {
 		return "", util.HTTPError{400, "MISSING_ARG_TOPIC"}
 	}

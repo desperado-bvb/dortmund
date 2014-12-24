@@ -28,7 +28,6 @@ type SERVER struct {
     httpListener  net.Listener
     pubSvr        *PubSvr 
     subSvrs       map[string] *SubSvr
-    tcs           map[string] *TransterCoding
 
     exitChan      chan int
     waitGroup     wait.WaitGroupWrapper
@@ -40,7 +39,6 @@ func NewServer(opts *options) *SERVER {
         healthy  :   1,
         exitChan : make(chan int),
         subSvrs  : make(map[string] *SubSvr),
-        tcs      : make(map[string] *TransterCoding),
     }
 
     if opts.ID < 0 || opts.ID > 4096 {
@@ -141,10 +139,6 @@ func (s *SERVER) Exit() {
     for _, sub := range s.subSvrs {
         sub.Close()
     }
-
-    for _, tc := range s.tcs {
-        tc.Close()
-    }
     
     s.Unlock()
 
@@ -185,7 +179,7 @@ func (s *SERVER) createSub(topic string, callbackUrl string) (string, error) {
     ctx := &context{s}
 
     deleteCallback := func(sub *SubSvr) {
-        s.DeleteExistingSub(sub.fd.ClientId)
+        s.DeleteExistingSub(sub.name)
     }
 
     sub, err := newSubSvr(callbackUrl, topic, ctx,  deleteCallback)
@@ -194,41 +188,16 @@ func (s *SERVER) createSub(topic string, callbackUrl string) (string, error) {
     }
 
     s.Lock()
-    _, ok := s.subSvrs[sub.fd.ClientId]
+    _, ok := s.subSvrs[sub.name]
     if ok {
         s.Unlock()
         sub.Close()
         return "", errors.New("sub conflict")
     }
 
-    s.subSvrs[sub.fd.ClientId] = sub
+    s.subSvrs[sub.name] = sub
     s.Unlock()
     return sub.fd.ClientId, nil
-}
-
-func (s *SERVER) createTransterCoding(productId string, url string) error {
-    ctx := &context{s}
-
-    deleteCallback := func(tc *TransterCoding) {
-        s.DeleteExistingTc(tc.name)
-    }
-
-    tc, err := newTransterCoding(productId, url, ctx, deleteCallback)
-    if err != nil {
-        return err
-    }
-
-    s.Lock()
-    _, ok := s.tcs[productId]
-    if ok {
-        s.Unlock()
-        tc.Close()
-        return errors.New("transterCoding agent conflict")
-    }
-
-    s.tcs[productId] = tc
-    s.Unlock()
-    return nil
 }
 
 func (s *SERVER) DeleteExistingSub(name string) error {
@@ -247,23 +216,4 @@ func (s *SERVER) DeleteExistingSub(name string) error {
     s.Unlock()
 
     return nil
-}
-
-func (s *SERVER) DeleteExistingTc(name string) error {
-    s.RLock()
-    tc, ok := s.tcs[name]
-    if !ok {
-        s.RUnlock()
-        return errors.New("transterCoding agent dont exist")        
-    }
-
-    s.RUnlock()
-
-    tc.Close()
-    
-    s.Lock()
-    delete(s.tcs, name)
-    s.Unlock()
-
-   return nil
 }
