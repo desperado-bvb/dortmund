@@ -89,16 +89,20 @@ func (s *SubSvr) subLoop() {
                         return
         	}
 
+               resp, err := http.PostForm(s.callbackUrl,
+                   url.Values{"topic": {m.TopicName}, "body": {string(m.Payload)}})
+              if err != nil {
+                   s.ctx.svr.logf("SubSvr(%s): call callbackUrl err - %s ", s.name, err)
+              }
+
+              res, err := ioutil.ReadAll(resp.Body)
+              fmt.Println("test sub:", res, err)
+
                if s.tc {
                     s.ctx.svr.pubSvr.submit("test2", []byte("hahahha"))
-               } else {
-                    resp, err := http.PostForm("http://api.easylink.io/v1/agent/test4",
-                        url.Values{"topic": {m.TopicName}, "body": {string(m.Payload)}})
-                    if err != nil {
-                        s.ctx.svr.logf("SubSvr(%s): call callbackUrl err - %s ", s.name, err)
-                    }
-                     resp.Body.Close()
-               }
+               } 
+               
+               resp.Body.Close()
 
         case <- s.exitChan:
         	goto exit
