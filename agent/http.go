@@ -63,9 +63,17 @@ func (s *httpServer) v1Router(w http.ResponseWriter, req *http.Request) error {
 	case "/sub":
 		util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
 			func() (interface{}, error) { return s.doSUB(req) }))
-	case "/sub":
+	case "/unsub":
 		util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
 			func() (interface{}, error) { return s.doUNSUB(req) }))
+
+       case "/addtc":
+                util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
+                        func() (interface{}, error) { return s.doADDTC(req) }))
+
+       case "/rmtc":
+                util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
+                        func() (interface{}, error) { return s.doRMTC(req) }))
 
 	default:
 		return errors.New(fmt.Sprintf("404 %s", req.URL.Path))
@@ -166,18 +174,88 @@ func (s *httpServer) doUNSUB(req *http.Request) (interface{}, error) {
 		return nil, util.HTTPError{400, "MSG_EMPTY"}
 	}
 
-	topic, err := s.getTopicFromQuery(req)
+	_, err = s.getTopicFromQuery(req)
 	if err != nil {
 		return nil, err
 	}
 
-	id, err := s.ctx.svr.DeleteExistingSub(string(body))
+	err = s.ctx.svr.DeleteExistingSub(string(body))
 	if err != nil {
 		s.ctx.svr.logf("ERROR: delete sub - %s", err)
 		return nil, util.HTTPError{503, "EXITING"}
 	}
 
 	return "OK", nil
+}
+
+func (s *httpServer) doADDTC(req *http.Request) (interface{}, error) {
+        
+        if req.ContentLength > s.ctx.svr.opts.MaxMsgSize {
+                return nil, util.HTTPError{413, "MSG_TOO_BIG"}
+        }
+        
+        readMax := s.ctx.svr.opts.MaxMsgSize + 1
+        body, err := ioutil.ReadAll(io.LimitReader(req.Body, readMax))
+        if err != nil {
+                return nil, util.HTTPError{500, "INTERNAL_ERROR"}
+        }
+        
+        if int64(len(body)) == readMax {
+                s.ctx.svr.logf("ERROR: /put hit max message size")
+                return nil, util.HTTPError{413, "MSG_TOO_BIG"}
+        }
+        
+        if len(body) == 0 { 
+                return nil, util.HTTPError{400, "MSG_EMPTY"}
+        }
+        
+        topic, err := s.getTopicFromQuery(req)
+        if err != nil {
+                return nil, err
+        }
+        
+        err = s.ctx.svr.createTransterCoding(topic, string(body))
+        if err != nil {
+                s.ctx.svr.logf("ERROR: create transterCoding - %s", err)
+                return nil, util.HTTPError{503, "EXITING"}
+        }
+        
+        return "OK", nil
+}
+
+func (s *httpServer) doRMTC(req *http.Request) (interface{}, error) {
+        
+        if req.ContentLength > s.ctx.svr.opts.MaxMsgSize {
+                return nil, util.HTTPError{413, "MSG_TOO_BIG"}
+        }
+        
+        readMax := s.ctx.svr.opts.MaxMsgSize + 1
+        body, err := ioutil.ReadAll(io.LimitReader(req.Body, readMax))
+        if err != nil {
+                return nil, util.HTTPError{500, "INTERNAL_ERROR"}
+        }
+        
+        if int64(len(body)) == readMax {
+                s.ctx.svr.logf("ERROR: /put hit max message size")
+                return nil, util.HTTPError{413, "MSG_TOO_BIG"}
+        }
+        
+        if len(body) == 0 { 
+                return nil, util.HTTPError{400, "MSG_EMPTY"}
+        }
+        
+        topic, err := s.getTopicFromQuery(req)
+        if err != nil {
+                return nil, err
+        }
+        
+        err = s.ctx.svr.DeleteExistingTc(topic)
+        if err != nil {
+                s.ctx.svr.logf("ERROR: create transterCoding - %s", err)
+                return nil, util.HTTPError{503, "EXITING"}
+        }
+        
+        return "OK", nil
 }
 
 func (s *httpServer) getTopicFromQuery(req *http.Request) (string, error) {
