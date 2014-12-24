@@ -69,7 +69,7 @@ func newSubSvr(callbackUrl string, topic string, tc bool, ctx *context, deleteCa
         return nil, err
     }
 
-     s.ctx.svr.logf("SubSvr: Connected with client id(%s) ", s.fd.ClientId)
+     s.ctx.svr.logf("SubSvr: Connected with client id(%s) ", s.name)
      s.waitGroup.Wrap(func() { s.subLoop() })
      return s, nil
 }
@@ -84,15 +84,21 @@ func (s *SubSvr) subLoop() {
     for {
         select {
         case  m := <- s.fd.Incoming :
-        	fmt.Println(m)
         	if m == nil {
         		go s.deleter.Do(func() { s.deleteCallback(s) })
                         return
         	}
 
-              if s.tc {
+               if s.tc {
                     s.ctx.svr.pubSvr.submit("test2", []byte("hahahha"))
-              }
+               } else {
+                    resp, err := http.PostForm("http://api.easylink.io/v1/agent/test4",
+                        url.Values{"topic": {m.TopicName}, "body": {string(m.Payload)}})
+                    if err != nil {
+                        s.ctx.svr.logf("SubSvr(%s): call callbackUrl err - %s ", s.name, err)
+                    }
+                     resp.Body.Close()
+               }
 
         case <- s.exitChan:
         	goto exit
