@@ -49,7 +49,7 @@ func newSubSvr(callbackUrl string, topic string, tc bool, ctx *context, deleteCa
 
     s.fd = handle
 
-    if err := s.fd.Connect(s.ctx.svr.opts.PubUsername, s.ctx.svr.opts.PubPassword); err != nil {
+    if err := s.fd.Connect(s.ctx.svr.opts.MqttUserName, s.ctx.svr.opts.MqttPassWord); err != nil {
         s.ctx.svr.logf("SubSvr(%s): connect to mqtt err - %s",  s.fd.ClientId, err)
         return nil, err
     }

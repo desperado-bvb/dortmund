@@ -30,17 +30,23 @@ func init() {
 type retainFlag bool
 type dupFlag bool
 
-type receipt chan struct{}
+type Receipt chan struct{}
 
-// Wait for the receipt to indicate that the job is done.
-func (r receipt) wait() {
-	// TODO: timeout
-	<-r
+func (r Receipt) Wait() error {
+    ticker := time.NewTicker(2 * time.Second)
+
+    select {
+    case <- r:
+        return nil
+    case <-ticker.C:
+        ticker.Stop()
+        return errors.New("timeout")
+    }
 }
 
-type job struct {
-	m proto.Message
-	r receipt
+type Job struct {
+	M proto.Message
+	R Receipt
 }
 
 const (
@@ -53,15 +59,15 @@ const (
 const clientQueueLength = 100
 
 type ClientConn struct {
-	ClientId string          
-	Dump     bool             
-	Incoming chan *proto.Publish
+	ClientId    string          
+	Dump        bool             
+	Incoming    chan *proto.Publish
                
-	out      chan job
-	conn     net.Conn
-	done     chan struct{}
-	connack  chan *proto.ConnAck
-	suback   chan *proto.SubAck
+	Out         chan Job
+	conn        net.Conn
+	done        chan struct{}
+	connack     chan *proto.ConnAck
+	suback      chan *proto.SubAck
 	exitFlage   int32
 }
 
@@ -74,7 +80,7 @@ func header(d dupFlag, q proto.QosLevel, r retainFlag) proto.Header {
 func NewClientConn(c net.Conn) *ClientConn {
 	cc := &ClientConn{
 		conn:     c,
-		out:      make(chan job, clientQueueLength),
+		Out:      make(chan Job, clientQueueLength),
 		Incoming: make(chan *proto.Publish, clientQueueLength),
 		done:     make(chan struct{}),
 		connack:  make(chan *proto.ConnAck),
@@ -88,7 +94,7 @@ func NewClientConn(c net.Conn) *ClientConn {
 func (c *ClientConn) reader() {
 	defer func() {
 		atomic.StoreInt32(&c.exitFlage, 1)
-		close(c.out)
+		close(c.Out)
 		close(c.Incoming)
 		c.conn.Close()
 	}()
@@ -137,15 +143,15 @@ func (c *ClientConn) writer() {
 		close(c.done)
 	}()
 
-	for job := range c.out {
+	for job := range c.Out {
 		if c.Dump {
-			log.Printf("dump out: %T", job.m)
+			log.Printf("dump out: %T", job.M)
 		}
 
 		// TODO: write timeout
-		err := job.m.Encode(c.conn)
-		if job.r != nil {
-			close(job.r)
+		err := job.M.Encode(c.conn)
+		if job.R != nil {
+			close(job.R)
 		}
 
 		if err != nil {
@@ -153,7 +159,7 @@ func (c *ClientConn) writer() {
 			return
 		}
 
-		if _, ok := job.m.(*proto.Disconnect); ok {
+		if _, ok := job.M.(*proto.Disconnect); ok {
 			return
 		}
 	}
@@ -219,26 +225,14 @@ func (c *ClientConn) Subscribe(tqs []proto.TopicQos) (*proto.SubAck, error) {
 	return ack, nil
 }
 
-// Publish publishes the given message to the MQTT server.
-// The QosLevel of the message must be QosAtLeastOnce for now.
-func (c *ClientConn) Publish(m *proto.Publish) error {
-	if atomic.LoadInt32(&c.exitFlage) == 1 {
-		return errors.New("exiting")
-	}
-	if m.QosLevel != proto.QosAtMostOnce {
-		return errors.New("unsupported QoS level")
-	}
-	c.out <- job{m: m}
-        return nil
+func (c *ClientConn) IsExit() bool {
+    return atomic.LoadInt32(&c.exitFlage) == 1
 }
 
-// sync sends a message and blocks until it was actually sent.
-func (c *ClientConn) sync(m proto.Message) error {
-	if atomic.LoadInt32(&c.exitFlage) == 1 {
-		return  errors.New("exiting")
-	}
-	j := job{m: m, r: make(receipt)}
-	c.out <- j
-	<-j.r
-	return nil
+
+func (c *ClientConn) sync(m proto.Message) {
+	j := Job{M: m, R: make(Receipt)}
+	c.Out <- j
+	<-j.R
+	return
 }

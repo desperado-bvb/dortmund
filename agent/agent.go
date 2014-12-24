@@ -88,24 +88,20 @@ func (s *SERVER) Main() {
 	
     ctx := &context{s}
 
-    pubSvr, err := newPubSvr(ctx)
-    if err != nil {
-        s.logf("FATAL: PubSvr(%s)  create pubSvr fail- %s", s.mqttAddr, err)
-        os.Exit(1)
-    }
+    pubSvr := newPubSvr(ctx)
     s.pubSvr = pubSvr
 
-    err = s.pubSvr.start()
+    err := s.pubSvr.start()
     if err != nil {
         s.logf("FATAL: PubSvr(%s) connection mqtt failed - %s", s.mqttAddr, err)
         os.Exit(1)
     }
 
-    err = s.retriveMeta(s.opts.MetaUrl)
+    /*err = s.retriveMeta(s.opts.MetaUrl)
     if err != nil {
         s.logf("FATAL: retriveMeta(%s) connection mqtt failed - %s", s.opts.MetaUrl, err)
         os.Exit(1)
-    }
+    }*/
 
     tcpListener, err := net.Listen("tcp", s.tcpAddr.String())
     if err != nil {
