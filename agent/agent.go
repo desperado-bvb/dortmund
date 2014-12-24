@@ -249,7 +249,7 @@ func (s *SERVER) retriveMeta(url string) error {
     }
     
      for _, c := range content {
-        _, err  = createSub(c["topic"], true, c["url"])
+        _, err  = s.createSub(c["topic"], true, c["url"])
         if err != nil {
             s.logf("retriveMeta: topic(%s) and url (%s) err - %s", c["topic"], c["url"], err)
         }

@@ -2,7 +2,6 @@ package agent
 
 import (
     "sync"
-    "fmt"
     "net"
     "net/url"
     "net/http"
@@ -107,7 +106,7 @@ func (s *SubSvr) subLoop() {
                   err = json.Unmarshal(res, &content)
                   if err != nil {
                       s.ctx.svr.logf("SubSvr(%s): json topic(%s) err - %s ", s.name,m.TopicName, err)
-                  } esle {
+                  } else {
                       s.ctx.svr.pubSvr.submit(content["topic"], []byte(content["body"]))
                   }
               } 
