@@ -34,6 +34,7 @@ type SERVER struct {
 }
 
 func NewServer(opts *options) *SERVER {
+	
     s := &SERVER {
         opts     :   opts,
         healthy  :   1,
@@ -81,6 +82,7 @@ func (s *SERVER) logf(f string, args ...interface{}) {
 }
 
 func (s *SERVER) Main() {
+	
     ctx := &context{s}
 
     pubSvr, err := newPubSvr(ctx)
@@ -101,21 +103,20 @@ func (s *SERVER) Main() {
         s.logf("FATAL: listen(%s) failed - %s", s.tcpAddr, err)
         os.Exit(1)
     }
-
     s.tcpListener = tcpListener
+    
     tcpServer := &tcpServer{ctx: ctx}
-
     s.waitGroup.Wrap(func() {
         util.TCPServer(s.tcpListener, tcpServer, s.opts.Logger)
     })
 
     httpListener, err := net.Listen("tcp", s.httpAddr.String())
     if err != nil {
-	s.logf("FATAL: listen (%s) failed - %s", s.httpAddr, err)
-	os.Exit(1)
+	    s.logf("FATAL: listen (%s) failed - %s", s.httpAddr, err)
+	    os.Exit(1)
     }
-
     s.httpListener = httpListener
+    
     httpServer := &httpServer{
         ctx:         ctx,
     }
@@ -126,6 +127,7 @@ func (s *SERVER) Main() {
 }
 
 func (s *SERVER) Exit() {
+	
     if s.tcpListener != nil {
         s.tcpListener.Close()
     }
@@ -147,6 +149,7 @@ func (s *SERVER) Exit() {
 }
 
 func (s *SERVER) SetHealth(err error) {
+	
     s.healthMtx.Lock()
     defer s.healthMtx.Unlock()
 
@@ -165,6 +168,7 @@ func (s *SERVER) IsHealthy() bool {
 func (s *SERVER) GetError() error {
     s.healthMtx.RLock()
     defer s.healthMtx.RUnlock()
+    
     return s.err
 }
 
@@ -172,6 +176,7 @@ func (s *SERVER) GetHealth() string {
     if !s.IsHealthy() {
         return fmt.Sprintf("NOK - %s", s.GetError())
     }
+    
     return "OK"
 }
 
@@ -197,10 +202,12 @@ func (s *SERVER) createSub(topic string, tc bool, callbackUrl string) (string, e
 
     s.subSvrs[sub.name] = sub
     s.Unlock()
+    
     return sub.fd.ClientId, nil
 }
 
 func (s *SERVER) DeleteExistingSub(name string) error {
+	
     s.RLock()
     sub, ok := s.subSvrs[name]
     if !ok {
