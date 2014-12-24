@@ -15,8 +15,9 @@ type options struct {
     MQTTAddress     string   `flag:"mqtt-address"`
     MaxMsgSize       int64    `flag:"max-msg-size" deprecated:"max-message-size" cfg:"max_msg_size"`
     MaxPubQueueSize int64   `flag:"max-pub-queue-size"`
-    PubUsername   string    `flag:"pub-username"`
+    PubUsername   string    `flag:"pub-username"`    
     PubPassword    string    `flag:"pub-password"`
+    MetaUrl              string    `flag:"meta-url"`
     Logger           logger
 }
 
@@ -30,7 +31,8 @@ func NewOptions() *options {
     option := &options {
         TCPAddress:             "0.0.0.0:4150",
         HTTPAddress:           "0.0.0.0:4151",
-        MQTTAddress:           "0.0.0.0:1883",
+        MQTTAddress:          "0.0.0.0:1883",
+        MetaUrl:                    "http://api.easylink.io/v1/agent/transtercodinginfo", 
         MaxMsgSize:             1024768,
         MaxPubQueueSize:  100,
         PubPassword:            "",

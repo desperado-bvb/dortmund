@@ -6,6 +6,9 @@ import (
     "fmt"
     "net"
     "errors"
+    "net/http"
+    "io/ioutil"
+    "encoding/json"
     "sync/atomic"
 
     "github.com/desperado-bvb/dortmund/util/wait"
@@ -95,6 +98,12 @@ func (s *SERVER) Main() {
     err = s.pubSvr.start()
     if err != nil {
         s.logf("FATAL: PubSvr(%s) connection mqtt failed - %s", s.mqttAddr, err)
+        os.Exit(1)
+    }
+
+    err = s.retriveMeta(s.opts.MetaUrl)
+    if err != nil {
+        s.logf("FATAL: retriveMeta(%s) connection mqtt failed - %s", s.opts.MetaUrl, err)
         os.Exit(1)
     }
 
@@ -223,4 +232,28 @@ func (s *SERVER) DeleteExistingSub(name string) error {
     s.Unlock()
 
     return nil
+}
+
+func (s *SERVER) retriveMeta(url string) error {
+    var content []map[string]string
+    resp, err := http.Get(url)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+
+    body, err := ioutil.ReadAll(resp.Body)
+    err = json.Unmarshal(body, &content)
+    if err != nil {
+        return err
+    }
+    
+     for _, c := range content {
+        _, err  = createSub(c["topic"], true, c["url"])
+        if err != nil {
+            s.logf("retriveMeta: topic(%s) and url (%s) err - %s", c["topic"], c["url"], err)
+        }
+     }
+
+     return nil
 }
