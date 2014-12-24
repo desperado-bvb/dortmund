@@ -4,6 +4,10 @@ import (
     "sync"
     "fmt"
     "net"
+    "net/url"
+    "net/http"
+    "io/ioutil"
+    "encoding/json"
 
     proto "github.com/huin/mqtt"
     "github.com/desperado-bvb/dortmund/util/mqtt"
@@ -90,19 +94,25 @@ func (s *SubSvr) subLoop() {
         	}
 
                resp, err := http.PostForm(s.callbackUrl,
-                   url.Values{"topic": {m.TopicName}, "body": {string(m.Payload)}})
+                   url.Values{"topic": {m.TopicName}, "body": {string(m.Payload.(proto.BytesPayload))}})
               if err != nil {
                    s.ctx.svr.logf("SubSvr(%s): call callbackUrl err - %s ", s.name, err)
+                   continue
               }
 
               res, err := ioutil.ReadAll(resp.Body)
-              fmt.Println("test sub:", res, err)
 
-               if s.tc {
-                    s.ctx.svr.pubSvr.submit("test2", []byte("hahahha"))
-               } 
+              if s.tc {
+                  content := make(map[string] string)
+                  err = json.Unmarshal(res, &content)
+                  if err != nil {
+                      s.ctx.svr.logf("SubSvr(%s): json topic(%s) err - %s ", s.name,m.TopicName, err)
+                  } esle {
+                      s.ctx.svr.pubSvr.submit(content["topic"], []byte(content["body"]))
+                  }
+              } 
                
-               resp.Body.Close()
+              resp.Body.Close()
 
         case <- s.exitChan:
         	goto exit
