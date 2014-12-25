@@ -112,7 +112,7 @@ func (s *httpServer) doHandle(req *http.Request, operation string) (interface{},
 
 	switch operation {
 	case "pub":
-		err := s.ctx.svr.pubSvr.submitAsync(topic, body)
+		err := s.ctx.svr.pubSvr.fd.SubmitAsync(topic, body)
                 if err != nil {
                         return nil, util.HTTPError{503, "EXITING"}
                 }

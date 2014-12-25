@@ -92,7 +92,7 @@ func (s *SubSvr) subLoop() {
         select {
         case  m := <- s.fd.Incoming :
             if m == nil {
-                s.Close()
+                go s.deleter.Do(func() { s.deleteCallback(s) })
                 return
             }
 
@@ -112,7 +112,7 @@ func (s *SubSvr) subLoop() {
                 if err != nil {
                     s.ctx.svr.logf("SubSvr(%s): json topic(%s) err - %s ", s.name,m.TopicName, err)
                 } else {
-                    s.ctx.svr.pubSvr.submit(content["topic"], []byte(content["body"]))
+                    s.fd.Submit(content["topic"], []byte(content["body"]))
                 }
             } 
                

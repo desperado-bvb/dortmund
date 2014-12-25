@@ -46,42 +46,10 @@ func (p *PubSvr) close() {
     p.fd.Disconnect()
 }
 
-func (p *PubSvr) submit(topic string, body []byte)  error {
-
-    if p.fd.IsExit() {
-        return errors.New("exiting")
-    }
-    
-    j := mqtt.Job {
-        M : &proto.Publish{
-            Header:    proto.Header{Retain: false},
-            TopicName: topic,
-            Payload:   proto.BytesPayload(body),
-        },
-    }
-
-    p.fd.Out <- j   
-
-    return nil
-}
-
 func (p *PubSvr) submitAsync(topic string, body []byte) error {
-
-    if p.fd.IsExit() {
-        return errors.New("exiting")
-    }
-
-    j := mqtt.Job {
-        M : &proto.Publish{
-            Header:    proto.Header{Retain: false},
-            TopicName: topic,
-            Payload:   proto.BytesPayload(body),
-        },
-        R : make(mqtt.Receipt),
-    }
-
-    p.fd.Out <- j
-    return j.R.Wait()
-    
+    return p.fd.SubmitAsync(topic, body)
 }
 
+func (p *PubSvr) submit(topic string, body []byte)  error {
+    return p.fd.Submit(topic, body)
+}

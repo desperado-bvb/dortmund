@@ -30,9 +30,9 @@ func init() {
 type retainFlag bool
 type dupFlag bool
 
-type Receipt chan struct{}
+type receipt chan struct{}
 
-func (r Receipt) Wait() error {
+func (r receipt) wait() error {
     ticker := time.NewTicker(2 * time.Second)
 
     select {
@@ -44,9 +44,9 @@ func (r Receipt) Wait() error {
     }
 }
 
-type Job struct {
-	M proto.Message
-	R Receipt
+type job struct {
+	m proto.Message
+	r receipt
 }
 
 const (
@@ -63,7 +63,7 @@ type ClientConn struct {
 	Dump        bool             
 	Incoming    chan *proto.Publish
                
-	Out         chan Job
+	out         chan job
 	conn        net.Conn
 	done        chan struct{}
 	connack     chan *proto.ConnAck
@@ -80,7 +80,7 @@ func header(d dupFlag, q proto.QosLevel, r retainFlag) proto.Header {
 func NewClientConn(c net.Conn) *ClientConn {
 	cc := &ClientConn{
 		conn:     c,
-		Out:      make(chan Job, clientQueueLength),
+		Out:      make(chan job, clientQueueLength),
 		Incoming: make(chan *proto.Publish, clientQueueLength),
 		done:     make(chan struct{}),
 		connack:  make(chan *proto.ConnAck),
@@ -94,7 +94,7 @@ func NewClientConn(c net.Conn) *ClientConn {
 func (c *ClientConn) reader() {
 	defer func() {
 		atomic.StoreInt32(&c.exitFlage, 1)
-		close(c.Out)
+		close(c.out)
 		close(c.Incoming)
 		c.conn.Close()
 	}()
@@ -143,15 +143,15 @@ func (c *ClientConn) writer() {
 		close(c.done)
 	}()
 
-	for job := range c.Out {
+	for job := range c.out {
 		if c.Dump {
-			log.Printf("dump out: %T", job.M)
+			log.Printf("dump out: %T", job.m)
 		}
 
 		// TODO: write timeout
-		err := job.M.Encode(c.conn)
-		if job.R != nil {
-			close(job.R)
+		err := job.m.Encode(c.conn)
+		if job.r != nil {
+			close(job.r)
 		}
 
 		if err != nil {
@@ -159,7 +159,7 @@ func (c *ClientConn) writer() {
 			return
 		}
 
-		if _, ok := job.M.(*proto.Disconnect); ok {
+		if _, ok := job.m.(*proto.Disconnect); ok {
 			return
 		}
 	}
@@ -231,8 +231,47 @@ func (c *ClientConn) IsExit() bool {
 
 
 func (c *ClientConn) sync(m proto.Message) {
-	j := Job{M: m, R: make(Receipt)}
-	c.Out <- j
-	<-j.R
+	j := job{m: m, r: make(receipt)}
+	c.out <- j
+	<-j.r
 	return
+}
+
+func (c *ClientConn) Submit(topic string, body []byte)  error {
+
+    if atomic.LoadInt32(&c.exitFlage) == 1 {
+        return errors.New("exiting")
+    }
+    
+    j := job {
+        M : &proto.Publish{
+            Header:    proto.Header{Retain: false},
+            TopicName: topic,
+            Payload:   proto.BytesPayload(body),
+        },
+    }
+
+   c.out <- j   
+
+    return nil
+}
+
+func (c *ClientCon) SubmitAsync(topic string, body []byte) error {
+
+    if atomic.LoadInt32(&c.exitFlage) == 1 {
+        return errors.New("exiting")
+    }
+
+    j := job {
+        m : &proto.Publish{
+            Header:    proto.Header{Retain: false},
+            TopicName: topic,
+            Payload:   proto.BytesPayload(body),
+        },
+        r : make(receipt),
+    }
+
+    c.out <- j
+    return j.r.wait()
+    
 }
