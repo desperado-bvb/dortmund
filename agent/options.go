@@ -10,14 +10,13 @@ import (
 
 type options struct {
     ID               int64    `flag:"worker-id" cfg:"id"`
-    TCPAddress       string   `flag:"tcp-address"`
-    HTTPAddress      string   `flag:"http-address"`
-    MQTTAddress      string   `flag:"mqtt-address"`
-    MaxMsgSize       int64    `flag:"max-msg-size" deprecated:"max-message-size" cfg:"max_msg_size"`
-    MaxPubQueueSize  int64    `flag:"max-pub-queue-size"`
-    MqttUserName     string   `flag:"mqtt-username"`    
-    MqttPassWord     string   `flag:"mqtt-password"`
-    MetaUrl          string   `flag:"meta-url"`
+    TCPAddress       string   `flag:"tcp-address" cfg:"tcp-address"`
+    HTTPAddress      string   `flag:"http-address" cfg:"http-address"`
+    MQTTAddress      string   `flag:"mqtt-address" cfg:"mqtt-address"`
+    MaxMsgSize       int64    `flag:"max-msg-size"  cfg:"max-msg-size"`
+    MqttUserName     string   `flag:"mqtt-username" cfg:"mqtt-username"`    
+    MqttPassWord     string   `flag:"mqtt-password" cfg:"mqtt-password"`
+    MetaUrl          string   `flag:"meta-url" cfg:"meta-url"`
     Logger           logger
 }
 
@@ -33,8 +32,6 @@ func NewOptions() *options {
         HTTPAddress:      "0.0.0.0:4151",
         MQTTAddress:      "0.0.0.0:1883",
         MetaUrl:          "http://api.easylink.io/v1/agent/transtercodinginfo", 
-        MaxMsgSize:       1024768,
-        MaxPubQueueSize:  100,
         MqttPassWord:     "",
         MqttUserName:     "",
         Logger:           log.New(os.Stderr, "[MQTT] ", log.Ldate|log.Ltime|log.Lmicroseconds),
