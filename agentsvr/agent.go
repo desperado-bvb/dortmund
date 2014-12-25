@@ -2,15 +2,11 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
 	"syscall"
 
-               "github.com/mreiferson/go-options"
+        "github.com/mreiferson/go-options"
 	"github.com/desperado-bvb/dortmund/agent"
 )
 
@@ -23,7 +19,7 @@ var (
 	maxMsgSize       = flagSet.Int64("max-msg-size", 1024768, "number of bytes per http msg body")
 	mqttUserName = flagSet.String("mqtt-username", "", "username for mqtt server")
 	mqttPassWord  = flagSet.String("mqtt-password", "", "password for mqtt server")
-	metaUrl              = flagSet.string("meta-url", "http://api.easylink.io/v1/agent/transtercodinginfo", "product meta data url")
+	metaUrl              = flagSet.String("meta-url", "http://api.easylink.io/v1/agent/transtercodinginfo", "product meta data url")
 	
 )
 

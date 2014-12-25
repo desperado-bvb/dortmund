@@ -9,7 +9,7 @@ import (
 )
 
 type options struct {
-    ID               int64    `flag:"worker-id" cfg:"id"`
+    ID               int64    
     TCPAddress       string   `flag:"tcp-address" cfg:"tcp-address"`
     HTTPAddress      string   `flag:"http-address" cfg:"http-address"`
     MQTTAddress      string   `flag:"mqtt-address" cfg:"mqtt-address"`
@@ -31,6 +31,7 @@ func NewOptions() *options {
         TCPAddress:       "0.0.0.0:4150",
         HTTPAddress:      "0.0.0.0:4151",
         MQTTAddress:      "0.0.0.0:1883",
+        MaxMsgSize:       1024768,
         MetaUrl:          "http://api.easylink.io/v1/agent/transtercodinginfo", 
         MqttPassWord:     "",
         MqttUserName:     "",

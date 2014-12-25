@@ -76,13 +76,22 @@ func (s *httpServer) v1Router(w http.ResponseWriter, req *http.Request) error {
                         func() (interface{}, error) { return s.doUNSUB(req) }))
 
         case "/queryLive":
-                util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
-                        func() (interface{}, error) { return s.doHandle(req, "query") }))
+                topic, err := s.getTopicFromQuery(req)
+           	if err != nil {
+                    util.ApiResponse(w, 503, err.Error(), nil)
+         	} else {
+                    _, ok := s.ctx.svr.subSvrs[topic]
+                    if ok {
+                        util.ApiResponse(w, 200, "live", nil)
+                    } else {
+                        util.ApiResponse(w, 200, "dead", nil)
+                    }
+                }
 
         case "restartPub":
                 err := s.ctx.svr.pubSvr.start()
                 if err != nil {
-                    util.ApiResponse(w, 200, err.Error(), nil)
+                    util.ApiResponse(w, 503, err.Error(), nil)
                 } else {
                     util.ApiResponse(w, 200, "OK", nil)
                 }
@@ -120,7 +129,7 @@ func (s *httpServer) doHandle(req *http.Request, operation string) (interface{},
 		return nil, util.HTTPError{413, "MSG_TOO_BIG"}
 	}
 
-	if len(body) == 0 &&  operation != "query"{
+	if len(body) == 0 {
 		return nil, util.HTTPError{400, "MSG_EMPTY"}
 	}
 
@@ -157,14 +166,6 @@ func (s *httpServer) doHandle(req *http.Request, operation string) (interface{},
         		}
         		res = "OK"
 
-        case "query":
-                _, ok := s.ctx.svr.subSvrs[topic]
-                if ok {
-                    res = "live"
-                } else {
-                    res = "dead"
-                }
-       
 	}
 
 	return res, nil

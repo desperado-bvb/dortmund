@@ -205,6 +205,9 @@ var ConnectionErrors = [6]error{
 // Sent a DISCONNECT message to the server. This function blocks until the
 // disconnect message is actually sent, and the connection is closed.
 func (c *ClientConn) Disconnect() {
+        if atomic.LoadInt32(&c.exitFlage) == 1 {
+                return
+        }
 	c.sync(&proto.Disconnect{})
 	<-c.done
 }
