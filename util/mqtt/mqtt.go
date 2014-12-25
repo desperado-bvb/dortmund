@@ -240,7 +240,7 @@ func (c *ClientConn) sync(m proto.Message) {
 func (c *ClientConn) Submit(topic string, body []byte)  error {
 
     if atomic.LoadInt32(&c.exitFlage) == 1 {
-        return errors.New("exiting")
+        return errors.New("mqtt client exiting")
     }
     
     j := job {
@@ -259,7 +259,7 @@ func (c *ClientConn) Submit(topic string, body []byte)  error {
 func (c *ClientConn) SubmitAsync(topic string, body []byte) error {
 
     if atomic.LoadInt32(&c.exitFlage) == 1 {
-        return errors.New("exiting")
+        return errors.New("mqtt client exiting")
     }
 
     j := job {

@@ -75,6 +75,27 @@ func (s *httpServer) v1Router(w http.ResponseWriter, req *http.Request) error {
                 util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
                         func() (interface{}, error) { return s.doUNSUB(req) }))
 
+        case "/queryLive":
+                util.NegotiateAPIResponseWrapper(w, req, util.POSTRequired(req,
+                        func() (interface{}, error) { return s.doHandle(req, "query") }))
+
+        case "restartPub":
+                err := s.ctx.svr.pubSvr.start()
+                if err != nil {
+                    util.ApiResponse(w, 200, err.Error(), nil)
+                } else {
+                    util.ApiResponse(w, 200, "OK", nil)
+                }
+
+        case "/Error":
+                healthy := s.ctx.svr.IsHealthy()
+                if healthy {
+                    util.ApiResponse(w, 200, "NIL", nil)
+                } else {
+                    err := s.ctx.svr.GetError()
+                    util.ApiResponse(w, 200, err.Error(), nil)
+                }
+
 	default:
 		return errors.New(fmt.Sprintf("404 %s", req.URL.Path))
 	}
@@ -99,7 +120,7 @@ func (s *httpServer) doHandle(req *http.Request, operation string) (interface{},
 		return nil, util.HTTPError{413, "MSG_TOO_BIG"}
 	}
 
-	if len(body) == 0 {
+	if len(body) == 0 &&  operation != "query"{
 		return nil, util.HTTPError{400, "MSG_EMPTY"}
 	}
 
@@ -114,7 +135,8 @@ func (s *httpServer) doHandle(req *http.Request, operation string) (interface{},
 	case "pub":
 		err := s.ctx.svr.pubSvr.fd.SubmitAsync(topic, body)
                 if err != nil {
-                        return nil, util.HTTPError{503, "EXITING"}
+                        s.ctx.svr.SetHealth(err)
+                        return nil, util.HTTPError{503, err.Error()}
                 }
 
 		res = "OK"
@@ -123,17 +145,26 @@ func (s *httpServer) doHandle(req *http.Request, operation string) (interface{},
 		id, err := s.ctx.svr.createSub(topic, false, string(body))
 		if err != nil {
 			s.ctx.svr.logf("ERROR: create sub - %s", err)
-			return nil, util.HTTPError{503, "EXITING"}
+			return nil, util.HTTPError{503, err.Error()}
 		}
 		res = id
 
 	case "add":
-		_, err = s.ctx.svr.createSub(topic, true, string(body))
+		_, err := s.ctx.svr.createSub(topic, true, string(body))
         		if err != nil {
                		s.ctx.svr.logf("ERROR: create transterCoding - %s", err)
-               		return nil, util.HTTPError{503, "EXITING"}
+               		return nil, util.HTTPError{503, err.Error()}
         		}
         		res = "OK"
+
+        case "query":
+                _, ok := s.ctx.svr.subSvrs[topic]
+                if ok {
+                    res = "live"
+                } else {
+                    res = "dead"
+                }
+       
 	}
 
 	return res, nil
