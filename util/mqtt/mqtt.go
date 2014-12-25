@@ -80,7 +80,7 @@ func header(d dupFlag, q proto.QosLevel, r retainFlag) proto.Header {
 func NewClientConn(c net.Conn) *ClientConn {
 	cc := &ClientConn{
 		conn:     c,
-		Out:      make(chan job, clientQueueLength),
+		out:      make(chan job, clientQueueLength),
 		Incoming: make(chan *proto.Publish, clientQueueLength),
 		done:     make(chan struct{}),
 		connack:  make(chan *proto.ConnAck),
@@ -244,7 +244,7 @@ func (c *ClientConn) Submit(topic string, body []byte)  error {
     }
     
     j := job {
-        M : &proto.Publish{
+        m : &proto.Publish{
             Header:    proto.Header{Retain: false},
             TopicName: topic,
             Payload:   proto.BytesPayload(body),
@@ -256,7 +256,7 @@ func (c *ClientConn) Submit(topic string, body []byte)  error {
     return nil
 }
 
-func (c *ClientCon) SubmitAsync(topic string, body []byte) error {
+func (c *ClientConn) SubmitAsync(topic string, body []byte) error {
 
     if atomic.LoadInt32(&c.exitFlage) == 1 {
         return errors.New("exiting")

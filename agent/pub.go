@@ -2,9 +2,7 @@ package agent
 
 import (
     "net"
-    "errors"
 
-    proto "github.com/huin/mqtt"
     "github.com/desperado-bvb/dortmund/util/mqtt"
 )
 
