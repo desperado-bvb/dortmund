@@ -63,10 +63,10 @@ type ClientConn struct {
 	Dump        bool             
 	Incoming    chan *proto.Publish
                
-	out         chan job
-	conn        net.Conn
-	done        chan struct{}
-	connack     chan *proto.ConnAck
+	out             chan job
+	conn          net.Conn
+	done          chan struct{}
+	connack    chan *proto.ConnAck
 	suback      chan *proto.SubAck
 	exitFlage   int32
 }
@@ -121,7 +121,8 @@ func (c *ClientConn) reader() {
 		case *proto.Publish:
 			c.Incoming <- m
 		case *proto.PubAck:
-			// ignore these
+			continue
+		case *PingResp:
 			continue
 		case *proto.ConnAck:
 			c.connack <- m
@@ -136,10 +137,7 @@ func (c *ClientConn) reader() {
 }
 
 func (c *ClientConn) writer() {
-	// Close connection on exit in order to cause reader to exit.
 	defer func() {
-		// Signal to Disconnect() that the message is on its way, or
-		// that the connection is closing one way or the other...
 		close(c.done)
 	}()
 
@@ -165,9 +163,24 @@ func (c *ClientConn) writer() {
 	}
 }
 
-// Send the CONNECT message to the server. If the ClientId is not already
-// set, use a default (a 63-bit decimal random number). The "clean session"
-// bit is always set.
+func (c *ClientConn) keppalive() {
+	ticker := time.NewTicker(600 * time.Second)
+	for {
+		select {
+		case <- ticker.C:
+			m   := &proto.PingReq{}
+			err  := m.Encode(c.conn)
+			if err != nil {
+
+			}
+		case <- done:
+			ticker.Stop()
+			return
+		}
+	}
+
+}
+
 func (c *ClientConn) Connect(user, pass string) error {
 	// TODO: Keepalive timer
 	if c.ClientId == "" {
@@ -178,6 +191,7 @@ func (c *ClientConn) Connect(user, pass string) error {
 		ProtocolVersion: 3,
 		ClientId:        c.ClientId,
 		CleanSession:    true,
+		KeepAliveTimer: 600,
 	}
 	if user != "" {
 		req.UsernameFlag = true
@@ -191,10 +205,8 @@ func (c *ClientConn) Connect(user, pass string) error {
 	return ConnectionErrors[ack.ReturnCode]
 }
 
-// ConnectionErrors is an array of errors corresponding to the
-// Connect return codes specified in the specification.
 var ConnectionErrors = [6]error{
-	nil, // Connection Accepted (not an error)
+	nil, 
 	errors.New("Connection Refused: unacceptable protocol version"),
 	errors.New("Connection Refused: identifier rejected"),
 	errors.New("Connection Refused: server unavailable"),
@@ -202,8 +214,6 @@ var ConnectionErrors = [6]error{
 	errors.New("Connection Refused: not authorized"),
 }
 
-// Sent a DISCONNECT message to the server. This function blocks until the
-// disconnect message is actually sent, and the connection is closed.
 func (c *ClientConn) Disconnect() {
         if atomic.LoadInt32(&c.exitFlage) == 1 {
                 return
@@ -212,8 +222,6 @@ func (c *ClientConn) Disconnect() {
 	<-c.done
 }
 
-// Subscribe subscribes this connection to a list of topics. Messages
-// will be delivered on the Incoming channel.
 func (c *ClientConn) Subscribe(tqs []proto.TopicQos) (*proto.SubAck, error) {
 	if atomic.LoadInt32(&c.exitFlage) == 1 {
 		return nil, errors.New("exiting")
