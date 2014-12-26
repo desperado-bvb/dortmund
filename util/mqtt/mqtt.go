@@ -122,7 +122,7 @@ func (c *ClientConn) reader() {
 			c.Incoming <- m
 		case *proto.PubAck:
 			continue
-		case *PingResp:
+		case *proto.PingResp:
 			continue
 		case *proto.ConnAck:
 			c.connack <- m
@@ -173,7 +173,7 @@ func (c *ClientConn) keppalive() {
 			if err != nil {
 
 			}
-		case <- done:
+		case <- c.done:
 			ticker.Stop()
 			return
 		}
