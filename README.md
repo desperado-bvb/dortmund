@@ -12,4 +12,4 @@ subscribe worker
 
 http publish
 --------
-send message by http
+> send message by http
